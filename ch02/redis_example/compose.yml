@@ -1,0 +1,15 @@
+services:
+  rust:
+    container_name: rust
+    build: ./
+    volumes:
+      - ./:/app
+      - /app/target
+    depends_on:
+      - redis
+
+  redis:
+    container_name: redis
+    image: redis
+    expose:
+      - 6379
