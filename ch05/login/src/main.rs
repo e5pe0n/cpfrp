@@ -1,21 +1,30 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use yew::prelude::*;
 
-use crate::db_access::DbConnection;
+use crate::db_access::{DbConnection, Person};
 use crate::login::{FormValues, LoginForm};
+use crate::one_person::OnePerson;
+use crate::persons_list::PersonsList;
 
 mod db_access;
 mod login;
+mod one_person;
+mod persons_list;
 
 enum Page {
     Login,
     PersonsList,
+    OnePerson,
 }
 
 #[function_component]
 fn App() -> Html {
+    let db_connection = use_state(|| Rc::new(RefCell::new(DbConnection::new())));
     let current_user: UseStateHandle<Option<String>> = use_state(|| None);
     let page = use_state(|| Page::Login);
-    let db_connection = DbConnection::new();
+    let op: UseStateHandle<Option<Person>> = use_state(|| None);
 
     let on_change_user = {
         let page = page.clone();
@@ -29,7 +38,10 @@ fn App() -> Html {
         let page = page.clone();
         let db_connection = db_connection.clone();
         move |data: FormValues| {
-            if let Some(user) = db_connection.get_user_by_username(&data.username) {
+            if let Some(user) = (*db_connection)
+                .borrow_mut()
+                .get_user_by_username(&data.username)
+            {
                 if user.password == data.password {
                     current_user.set(Some(user.username.clone()));
                     page.set(Page::PersonsList);
@@ -47,6 +59,28 @@ fn App() -> Html {
             }
         }
     };
+
+    let on_one_person = Callback::from({
+        let page = page.clone();
+        let op = op.clone();
+        let db_connection = db_connection.clone();
+        move |v: Option<u32>| {
+            op.set(match v {
+                Some(i) => (*db_connection).borrow_mut().get_person_by_id(i).cloned(),
+                _ => None,
+            });
+            page.set(Page::OnePerson);
+        }
+    });
+
+    let on_back = Callback::from({
+        let page = page.clone();
+        let op = op.clone();
+        move |_| {
+            op.set(None);
+            page.set(Page::PersonsList);
+        }
+    });
 
     html! {
         <div>
@@ -88,8 +122,11 @@ fn App() -> Html {
                         <LoginForm {on_login} />
                     },
                     Page::PersonsList => html! {
-                        <h2>{ "Page to be implemented" }</h2>
+                        <PersonsList {on_one_person} db_connection={(*db_connection).clone()} />
                     },
+                    Page::OnePerson => html! {
+                        <OnePerson op={(*op).clone()} db_connection={(*db_connection).clone()} on_back={on_back} />
+                    }
                 }
             }
             <footer>
